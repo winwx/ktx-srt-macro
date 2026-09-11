@@ -13,4 +13,9 @@ class PassengerType(Enum):
 class TrainType(Enum):
     """열차 유형"""
     KTX = "ktx"
-    SRT = "srt"
+    SAEMAEUL = "saemaeul"
+    MUGUNGHWA = "mugunghwa"
+    TONGGEUN = "tonggeun"
+    NURIRO = "nuriro"
+    ITX_CHEONGCHUN = "itx_cheongchun"
+    AIRPORT = "airport"

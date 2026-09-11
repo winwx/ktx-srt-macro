@@ -1,6 +1,6 @@
 # Test Suite
 
-KTX/SRT Macro 프로젝트의 종합 테스트 스위트입니다.
+KTX Macro 프로젝트의 종합 테스트 스위트입니다.
 
 ## 📁 테스트 구조
 
@@ -18,7 +18,6 @@ tests/
 ├── integration/                   # 통합 테스트
 │   └── infrastructure/
 │       ├── test_ktx_service.py   # KTX 서비스 통합 테스트
-│       ├── test_srt_service.py   # SRT 서비스 통합 테스트
 │       └── test_adapters.py      # 어댑터 통합 테스트
 ├── conftest.py                    # 공통 픽스처 및 설정
 └── README.md                      # 본 문서

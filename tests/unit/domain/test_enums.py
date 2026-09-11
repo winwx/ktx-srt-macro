@@ -53,30 +53,40 @@ class TestTrainType:
     def test_train_type_values(self):
         """Test that TrainType has correct values"""
         assert TrainType.KTX.value == "ktx"
-        assert TrainType.SRT.value == "srt"
+        assert TrainType.SAEMAEUL.value == "saemaeul"
+        assert TrainType.MUGUNGHWA.value == "mugunghwa"
+        assert TrainType.TONGGEUN.value == "tonggeun"
+        assert TrainType.NURIRO.value == "nuriro"
+        assert TrainType.ITX_CHEONGCHUN.value == "itx_cheongchun"
+        assert TrainType.AIRPORT.value == "airport"
 
     def test_train_type_members(self):
         """Test that TrainType has all expected members"""
         train_types = list(TrainType)
-        assert len(train_types) == 2
+        assert len(train_types) == 7
         assert TrainType.KTX in train_types
-        assert TrainType.SRT in train_types
+        assert TrainType.SAEMAEUL in train_types
+        assert TrainType.MUGUNGHWA in train_types
+        assert TrainType.TONGGEUN in train_types
+        assert TrainType.NURIRO in train_types
+        assert TrainType.ITX_CHEONGCHUN in train_types
+        assert TrainType.AIRPORT in train_types
 
     def test_train_type_by_value(self):
         """Test accessing TrainType by value"""
         assert TrainType("ktx") == TrainType.KTX
-        assert TrainType("srt") == TrainType.SRT
+        assert TrainType("mugunghwa") == TrainType.MUGUNGHWA
 
     def test_train_type_invalid_value(self):
         """Test that invalid value raises ValueError"""
         with pytest.raises(ValueError):
-            TrainType("mugunghwa")
+            TrainType("srt")
 
     def test_train_type_equality(self):
         """Test TrainType equality"""
         assert TrainType.KTX == TrainType.KTX
-        assert TrainType.SRT == TrainType.SRT
-        assert TrainType.KTX != TrainType.SRT
+        assert TrainType.MUGUNGHWA == TrainType.MUGUNGHWA
+        assert TrainType.KTX != TrainType.MUGUNGHWA
 
     def test_train_type_string_representation(self):
         """Test TrainType string representation"""
@@ -87,6 +97,6 @@ class TestTrainType:
         """Test that TrainType contains KTX"""
         assert TrainType.KTX in TrainType
 
-    def test_train_type_contains_srt(self):
-        """Test that TrainType contains SRT"""
-        assert TrainType.SRT in TrainType
+    def test_train_type_contains_mugunghwa(self):
+        """Test that TrainType contains MUGUNGHWA"""
+        assert TrainType.MUGUNGHWA in TrainType

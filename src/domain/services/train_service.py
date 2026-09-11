@@ -42,5 +42,5 @@ class TrainService(ABC):
     @property
     @abstractmethod
     def service_name(self) -> str:
-        """Name of the train service (KTX, SRT, etc.)"""
+        """Name of the train service (KTX, etc.)"""
         pass

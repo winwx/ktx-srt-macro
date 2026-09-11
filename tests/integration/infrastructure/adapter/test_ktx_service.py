@@ -124,6 +124,7 @@ class TestKTXServiceSearchTrains:
         mock_train.arr_date = "20250115"
         mock_train.arr_time = "123000"
         mock_train.train_type = "KTX"
+        mock_train.train_type_name = "KTX"
         mock_train.adultcharge = "59800"
         mock_train.seat_count = 10
 

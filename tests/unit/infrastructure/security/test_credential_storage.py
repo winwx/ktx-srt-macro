@@ -16,8 +16,6 @@ class TestCredentialStorageConstants:
         # Login keys
         assert hasattr(CredentialStorage, "KEY_KTX_USERNAME")
         assert hasattr(CredentialStorage, "KEY_KTX_PASSWORD")
-        assert hasattr(CredentialStorage, "KEY_SRT_USERNAME")
-        assert hasattr(CredentialStorage, "KEY_SRT_PASSWORD")
 
         # Payment keys
         assert hasattr(CredentialStorage, "KEY_KTX_CARD_NUMBER")
@@ -25,12 +23,6 @@ class TestCredentialStorageConstants:
         assert hasattr(CredentialStorage, "KEY_KTX_CARD_EXPIRE")
         assert hasattr(CredentialStorage, "KEY_KTX_CARD_VALIDATION")
         assert hasattr(CredentialStorage, "KEY_KTX_CARD_CORPORATE")
-
-        assert hasattr(CredentialStorage, "KEY_SRT_CARD_NUMBER")
-        assert hasattr(CredentialStorage, "KEY_SRT_CARD_PASSWORD")
-        assert hasattr(CredentialStorage, "KEY_SRT_CARD_EXPIRE")
-        assert hasattr(CredentialStorage, "KEY_SRT_CARD_VALIDATION")
-        assert hasattr(CredentialStorage, "KEY_SRT_CARD_CORPORATE")
 
 
 @patch("src.infrastructure.security.credential_storage.keyring")
@@ -122,62 +114,6 @@ class TestCredentialStorageKTXLogin:
 
         # Act - should not raise exception
         CredentialStorage.delete_ktx_login()
-
-        # Assert
-        assert mock_keyring.delete_password.call_count == 2
-
-
-@patch("src.infrastructure.security.credential_storage.keyring")
-class TestCredentialStorageSRTLogin:
-    """Tests for SRT login credential storage"""
-
-    def test_save_srt_login(self, mock_keyring):
-        """Test saving SRT login credentials"""
-        # Arrange
-        username = "srt_user"
-        password = "srt_password"
-
-        # Act
-        CredentialStorage.save_srt_login(username, password)
-
-        # Assert
-        assert mock_keyring.set_password.call_count == 2
-        mock_keyring.set_password.assert_any_call(
-            "KTX-SRT-Macro", "srt_username", username
-        )
-        mock_keyring.set_password.assert_any_call(
-            "KTX-SRT-Macro", "srt_password", password
-        )
-
-    def test_load_srt_login_success(self, mock_keyring):
-        """Test loading SRT login credentials successfully"""
-        # Arrange
-        mock_keyring.get_password.side_effect = ["srt_user", "srt_password"]
-
-        # Act
-        result = CredentialStorage.load_srt_login()
-
-        # Assert
-        assert result is not None
-        assert isinstance(result, LoginCredentials)
-        assert result.username == "srt_user"
-        assert result.password == "srt_password"
-
-    def test_load_srt_login_missing(self, mock_keyring):
-        """Test loading SRT login credentials when missing"""
-        # Arrange
-        mock_keyring.get_password.side_effect = [None, None]
-
-        # Act
-        result = CredentialStorage.load_srt_login()
-
-        # Assert
-        assert result is None
-
-    def test_delete_srt_login(self, mock_keyring):
-        """Test deleting SRT login credentials"""
-        # Act
-        CredentialStorage.delete_srt_login()
 
         # Assert
         assert mock_keyring.delete_password.call_count == 2
@@ -301,73 +237,6 @@ class TestCredentialStorageKTXPayment:
         """Test deleting KTX payment credentials"""
         # Act
         CredentialStorage.delete_ktx_payment()
-
-        # Assert
-        assert mock_keyring.delete_password.call_count == 5
-
-
-@patch("src.infrastructure.security.credential_storage.keyring")
-class TestCredentialStorageSRTPayment:
-    """Tests for SRT payment credential storage"""
-
-    def test_save_srt_payment(self, mock_keyring):
-        """Test saving SRT payment credentials"""
-        # Arrange
-        card_number = "9876543210987654"
-        card_password = "34"
-        expire = "2612"
-        validation_number = "800101"
-        is_corporate = False
-
-        # Act
-        CredentialStorage.save_srt_payment(
-            card_number, card_password, expire, validation_number, is_corporate
-        )
-
-        # Assert
-        assert mock_keyring.set_password.call_count == 5
-        mock_keyring.set_password.assert_any_call(
-            "KTX-SRT-Macro", "srt_card_number", card_number
-        )
-
-    def test_load_srt_payment_success(self, mock_keyring):
-        """Test loading SRT payment credentials successfully"""
-        # Arrange
-        mock_keyring.get_password.side_effect = [
-            "9876543210987654",  # card_number
-            "34",                # card_password
-            "2612",              # expire
-            "800101",            # validation_number
-            "False"              # is_corporate
-        ]
-
-        # Act
-        result = CredentialStorage.load_srt_payment()
-
-        # Assert
-        assert result is not None
-        assert isinstance(result, PaymentCredentials)
-        assert result.card_number == "9876543210987654"
-        assert result.card_password == "34"
-        assert result.expire == "2612"
-        assert result.validation_number == "800101"
-        assert result.is_corporate is False
-
-    def test_load_srt_payment_missing(self, mock_keyring):
-        """Test loading SRT payment credentials when missing"""
-        # Arrange
-        mock_keyring.get_password.side_effect = [None, None, None, None, None]
-
-        # Act
-        result = CredentialStorage.load_srt_payment()
-
-        # Assert
-        assert result is None
-
-    def test_delete_srt_payment(self, mock_keyring):
-        """Test deleting SRT payment credentials"""
-        # Act
-        CredentialStorage.delete_srt_payment()
 
         # Assert
         assert mock_keyring.delete_password.call_count == 5

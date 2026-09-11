@@ -2,7 +2,6 @@
 import pytest
 from unittest.mock import Mock, patch
 from src.infrastructure.adapters.ktx_service import KTXService
-from src.infrastructure.adapters.srt_service import SRTService
 
 
 @pytest.mark.integration
@@ -18,7 +17,7 @@ class TestKTXServiceIntegration:
     def test_service_initialization(self, ktx_service):
         """Test that KTXService initializes correctly"""
         assert ktx_service is not None
-        assert ktx_service.service_name == "KTX"
+        assert ktx_service.service_name == "Korail"
         assert ktx_service.is_logged_in() is False
 
     def test_service_implements_train_service(self, ktx_service):
@@ -87,113 +86,3 @@ class TestKTXServiceIntegration:
         assert payment_result.success is True
 
 
-@pytest.mark.integration
-@pytest.mark.service
-class TestSRTServiceIntegration:
-    """Comprehensive integration tests for SRTService"""
-
-    @pytest.fixture
-    def srt_service(self):
-        """Create SRTService instance"""
-        return SRTService()
-
-    def test_service_initialization(self, srt_service):
-        """Test that SRTService initializes correctly"""
-        assert srt_service is not None
-        assert srt_service.service_name == "SRT"
-        assert srt_service.is_logged_in() is False
-
-    def test_service_implements_train_service(self, srt_service):
-        """Test that SRTService properly implements TrainService interface"""
-        from src.domain.services.train_service import TrainService
-        assert isinstance(srt_service, TrainService)
-
-    @patch('src.infrastructure.adapters.srt_service.SRT')
-    def test_login_flow(self, mock_srt_class, srt_service):
-        """Test complete login flow"""
-        mock_srt = Mock()
-        mock_srt.login.return_value = True
-        srt_service._srt = mock_srt
-
-        # Login
-        result = srt_service.login("user", "pass")
-        assert result is True
-        assert srt_service.is_logged_in() is True
-
-        # Logout
-        result = srt_service.logout()
-        assert result is True
-        assert srt_service.is_logged_in() is False
-
-    @patch('src.infrastructure.adapters.srt_service.SRT')
-    def test_search_trains_with_passengers(
-        self, mock_srt_class, srt_service, sample_srt_reservation_request, mock_srt_train
-    ):
-        """Test train search with passengers"""
-        srt_service._logged_in = True
-        mock_srt = Mock()
-        mock_srt.search_train.return_value = [mock_srt_train]
-        srt_service._srt = mock_srt
-
-        trains = srt_service.search_trains(sample_srt_reservation_request)
-
-        assert len(trains) == 1
-        assert trains[0].train_number == "S001"
-        mock_srt.search_train.assert_called_once()
-
-    @patch('src.infrastructure.adapters.srt_service.SRT')
-    def test_reserve_train_with_payment(
-        self, mock_srt_class, srt_service, sample_srt_train_schedule,
-        sample_srt_reservation_request, corporate_credit_card, mock_srt_train, mock_srt_reservation
-    ):
-        """Test complete reservation and payment flow with corporate card"""
-        srt_service._logged_in = True
-        mock_srt = Mock()
-
-        # Setup mocks
-        mock_srt_train.seat_available.return_value = True
-        mock_srt.search_train.return_value = [mock_srt_train]
-        mock_srt.reserve.return_value = mock_srt_reservation
-        mock_srt.get_reservations.return_value = [mock_srt_reservation]
-        mock_srt.pay_with_card.return_value = True
-
-        srt_service._srt = mock_srt
-
-        # Reserve
-        result = srt_service.reserve_train(sample_srt_train_schedule, sample_srt_reservation_request)
-        assert result.success is True
-        assert result.reservation_number == "R123456"
-
-        # Payment with corporate card
-        payment_result = srt_service.payment_reservation(result, corporate_credit_card)
-        assert payment_result.success is True
-
-
-@pytest.mark.integration
-@pytest.mark.service
-@pytest.mark.slow
-class TestCrossServiceComparison:
-    """Tests comparing KTX and SRT service behaviors"""
-
-    def test_both_services_implement_same_interface(self):
-        """Test that both services implement TrainService interface"""
-        from src.domain.services.train_service import TrainService
-
-        ktx = KTXService()
-        srt = SRTService()
-
-        assert isinstance(ktx, TrainService)
-        assert isinstance(srt, TrainService)
-
-    def test_both_services_have_consistent_behavior(self):
-        """Test that both services behave consistently"""
-        ktx = KTXService()
-        srt = SRTService()
-
-        # Both should start logged out
-        assert ktx.is_logged_in() is False
-        assert srt.is_logged_in() is False
-
-        # Both should have service names
-        assert ktx.service_name == "KTX"
-        assert srt.service_name == "SRT"

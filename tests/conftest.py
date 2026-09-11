@@ -71,21 +71,6 @@ def sample_train_schedule():
 
 
 @pytest.fixture
-def sample_srt_train_schedule():
-    """Fixture for SRT train schedule"""
-    return TrainSchedule(
-        train_number="S001",
-        departure_station="수서",
-        arrival_station="부산",
-        departure_time=datetime(2025, 1, 15, 10, 0, 0),
-        arrival_time=datetime(2025, 1, 15, 12, 30, 0),
-        train_type=TrainType.SRT,
-        available_seats=10,
-        price=52000
-    )
-
-
-@pytest.fixture
 def sample_reservation_request():
     """Fixture for reservation request"""
     return ReservationRequest(
@@ -98,21 +83,6 @@ def sample_reservation_request():
             Passenger(passenger_type=PassengerType.CHILD, count=1)
         ],
         train_type=TrainType.KTX
-    )
-
-
-@pytest.fixture
-def sample_srt_reservation_request():
-    """Fixture for SRT reservation request"""
-    return ReservationRequest(
-        departure_station="수서",
-        arrival_station="부산",
-        departure_date=date(2025, 1, 15),
-        departure_time="100000",
-        passengers=[
-            Passenger(passenger_type=PassengerType.ADULT, count=2),
-        ],
-        train_type=TrainType.SRT
     )
 
 
@@ -192,25 +162,10 @@ def mock_korail_train():
     train.arr_date = "20250115"
     train.arr_time = "123000"
     train.train_type = "KTX"
+    train.train_type_name = "KTX"
     train.adultcharge = "59800"
     train.seat_count = 10
     train.has_seat.return_value = True
-    return train
-
-
-@pytest.fixture
-def mock_srt_train():
-    """Fixture for mock SRT train object"""
-    from unittest.mock import Mock
-    train = Mock()
-    train.train_number = "S001"
-    train.dep_date = "20250115"
-    train.dep_time = "100000"
-    train.arr_date = "20250115"
-    train.arr_time = "123000"
-    train.adultcharge = "52000"
-    train.seat_count = 10
-    train.seat_available.return_value = True
     return train
 
 
@@ -220,15 +175,6 @@ def mock_korail_reservation():
     from unittest.mock import Mock
     reservation = Mock()
     reservation.rsv_id = "R123456"
-    return reservation
-
-
-@pytest.fixture
-def mock_srt_reservation():
-    """Fixture for mock SRT reservation"""
-    from unittest.mock import Mock
-    reservation = Mock()
-    reservation.reservation_number = "R123456"
     return reservation
 
 

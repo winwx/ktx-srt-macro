@@ -22,10 +22,10 @@ classifiers = [
 dependencies = [
     "requests>=2.32.5",
     "cryptography>=46.0.1",
-    "curl-cffi>=0.13.0",
     "pycryptodome>=3.18.0",
     "pyqt6>=6.9.1",
     "keyring>=25.5.0",
+    "six>=1.16.0",
 ]
 
 [project.optional-dependencies]
@@ -170,7 +170,6 @@ disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = [
-    "curl_cffi.*",
     "Crypto.*",
 ]
 ignore_missing_imports = true

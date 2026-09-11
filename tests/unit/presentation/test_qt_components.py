@@ -18,7 +18,6 @@ class TestLogSignals:
     def test_log_signals_has_required_signals(self, log_signals):
         """Test that LogSignals has all required signals"""
         assert hasattr(log_signals, 'log_message')
-        assert hasattr(log_signals, 'show_alert_button')
         assert hasattr(log_signals, 'show_ktx_alert_button')
 
     def test_log_message_signal_can_emit(self, log_signals):

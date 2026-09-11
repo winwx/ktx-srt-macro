@@ -8,7 +8,6 @@ from src.infrastructure.external.ktx import (
     Schedule,
     Ticket,
     Reservation,
-    Seat,
     AdultPassenger,
     ChildPassenger,
     SeniorPassenger,
@@ -17,7 +16,6 @@ from src.infrastructure.external.ktx import (
     NeedToLoginError,
     NoResultsError,
     SoldOutError,
-    NetFunnelHelper,
     TrainType,
     ReserveOption,
 )
@@ -342,46 +340,6 @@ class TestReservation:
         assert reservation.is_waiting is True
 
 
-class TestSeat:
-    """Test Seat class."""
-
-    def test_seat_initialization(self):
-        """Test Seat object creation."""
-        data = {
-            "h_srcar_no": "05",
-            "h_seat_no": "12A",
-            "h_psrm_cl_nm": "일반실",
-            "h_psg_tp_dv_nm": "어른",
-            "h_rcvd_amt": "59800",
-            "h_seat_prc": "59800",
-            "h_dcnt_amt": "0",
-        }
-        seat = Seat(data)
-
-        assert seat.car == "05"
-        assert seat.seat == "12A"
-        assert seat.seat_type == "일반실"
-        assert seat.passenger_type == "어른"
-        assert seat.price == 59800
-        assert seat.discount == 0
-        assert seat.is_waiting is False
-
-    def test_seat_waiting(self):
-        """Test waiting seat detection."""
-        data = {
-            "h_srcar_no": "",
-            "h_seat_no": "",
-            "h_psrm_cl_nm": "일반실",
-            "h_psg_tp_dv_nm": "어른",
-            "h_rcvd_amt": "59800",
-            "h_seat_prc": "59800",
-            "h_dcnt_amt": "0",
-        }
-        seat = Seat(data)
-
-        assert seat.is_waiting is True
-
-
 class TestPassenger:
     """Test Passenger classes."""
 
@@ -475,76 +433,6 @@ class TestKorailErrors:
 
         assert error.code == "ERR211161"
         assert "ERR211161" in SoldOutError.codes
-
-
-class TestNetFunnelHelper:
-    """Test NetFunnelHelper class."""
-
-    def test_netfunnel_initialization(self):
-        """Test NetFunnelHelper initialization."""
-        helper = NetFunnelHelper()
-
-        assert helper._cached_key is None
-        assert helper._last_fetch_time == 0
-        assert helper._cache_ttl == 50
-
-    def test_build_params_getTidchkEnter(self):
-        """Test parameter building for getTidchkEnter."""
-        helper = NetFunnelHelper()
-        params = helper._build_params(NetFunnelHelper.OP_CODE["getTidchkEnter"])
-
-        assert params["opcode"] == "5101"
-        assert params["sid"] == "service_1"
-        assert params["aid"] == "act_8"
-
-    def test_build_params_chkEnter(self):
-        """Test parameter building for chkEnter."""
-        helper = NetFunnelHelper()
-        helper._cached_key = "test_key"
-        params = helper._build_params(NetFunnelHelper.OP_CODE["chkEnter"])
-
-        assert params["opcode"] == "5002"
-        assert params["key"] == "test_key"
-        assert params["ttl"] == "1"
-
-    def test_build_params_setComplete(self):
-        """Test parameter building for setComplete."""
-        helper = NetFunnelHelper()
-        helper._cached_key = "test_key"
-        params = helper._build_params(NetFunnelHelper.OP_CODE["setComplete"])
-
-        assert params["opcode"] == "5004"
-        assert params["key"] == "test_key"
-
-    def test_parse_response(self):
-        """Test parsing NetFunnel response."""
-        helper = NetFunnelHelper()
-        response = "200:key=test_key&nwait=10"
-        parsed = helper._parse(response)
-
-        assert parsed["status"] == "200"
-        assert parsed["key"] == "test_key"
-        assert parsed["nwait"] == "10"
-
-    def test_is_cache_valid(self):
-        """Test cache validity check."""
-        helper = NetFunnelHelper()
-        helper._cached_key = "test_key"
-        helper._last_fetch_time = 1000.0
-
-        assert helper._is_cache_valid(1010.0) is True
-        assert helper._is_cache_valid(1051.0) is False
-
-    def test_clear(self):
-        """Test clearing cache."""
-        helper = NetFunnelHelper()
-        helper._cached_key = "test_key"
-        helper._last_fetch_time = 1000.0
-
-        helper.clear()
-
-        assert helper._cached_key is None
-        assert helper._last_fetch_time == 0
 
 
 class TestKorail:
