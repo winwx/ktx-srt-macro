@@ -92,13 +92,17 @@ class KTXService(TrainService):
             passengers = [PassengerMapper.to_korail(p) for p in request.passengers]
 
             # Find the train again for reservation
+            # 그룹코드로 좁히지 않고 전체 조회 후 train_no로 정확히 매칭한다.
+            # (예: ITX-마음처럼 domain TrainType에 없는 종류는 _convert_train_type에서
+            # KTX로 안전하게 폴백되는데, 여기서 그 그룹코드로 재검색을 좁히면
+            # 실제로는 다른 그룹에 속한 열차라 재조회 시 계속 찾지 못하게 된다)
             trains = self._korail.search_train(
                 dep=request.departure_station,
                 arr=request.arrival_station,
                 date=request.departure_date.strftime("%Y%m%d"),
                 time=request.departure_time,
                 passengers=passengers,
-                train_type=self._to_korail_train_type(request.train_type),
+                train_type=KorailTrainType.ALL,
                 include_no_seats=True,
             )
 

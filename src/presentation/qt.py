@@ -7,25 +7,51 @@ import random
 import time
 import threading
 import platform
+import json
+from pathlib import Path
 from collections import deque
 from string import Template
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QLineEdit, QTextEdit,
-    QCheckBox, QScrollArea, QFrame, QComboBox, QDateEdit, QTimeEdit, QCompleter,
-    QDialog, QStackedWidget, QTabWidget,
+    QCheckBox, QScrollArea, QFrame, QComboBox, QDateEdit, QTimeEdit,
+    QDialog, QStackedWidget, QTabWidget, QAbstractSpinBox,
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QDate, QTime
 from PyQt6.QtGui import QIcon, QPalette, QColor, QPixmap, QPainter
-from domain.models.entities import ReservationRequest, Passenger, TrainSchedule, ReservationResult, CreditCard, PaymentResult
-from domain.models.enums import PassengerType, TrainType
+from src.domain.models.entities import ReservationRequest, Passenger, TrainSchedule, ReservationResult, CreditCard, PaymentResult
+from src.domain.models.enums import PassengerType, TrainType
 from src.infrastructure.adapters.ktx_service import KTXService
 from src.infrastructure.security.credential_storage import CredentialStorage
 from src.constants.ui import (
     DEFAULT_KTX_DEPARTURE, DEFAULT_KTX_ARRIVAL,
     RETRY_DELAY_MIN, RETRY_DELAY_MAX, MAX_CONCURRENT_JOBS, MAX_SEARCH_JOBS,
 )
+
+
+class NoScrollWheelMixin:
+    """스크롤 영역 안에 있는 콤보박스/날짜/시간 필드가 포커스 없이도 마우스 휠에 반응해
+    값을 바꿔버리는 문제를 막는다. 포커스가 없으면 휠 이벤트를 무시해서 부모(스크롤
+    영역)로 흘려보내고, 클릭해서 포커스를 준 뒤에만 휠로 값 조정이 가능하게 한다."""
+
+    def wheelEvent(self, event):
+        if self.hasFocus():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
+
+class NoScrollComboBox(NoScrollWheelMixin, QComboBox):
+    pass
+
+
+class NoScrollDateEdit(NoScrollWheelMixin, QDateEdit):
+    pass
+
+
+class NoScrollTimeEdit(NoScrollWheelMixin, QTimeEdit):
+    pass
 
 
 TRAIN_TYPE_LABELS = {
@@ -37,6 +63,16 @@ TRAIN_TYPE_LABELS = {
     TrainType.ITX_CHEONGCHUN: "ITX-청춘",
     TrainType.AIRPORT: "공항직통",
 }
+
+# 검색 작업 카드들의 입력값을 재실행 후에도 유지하기 위한 저장 위치.
+# 저장된 파일이 없는 최초 실행에서만 DEFAULT_SEARCH_JOBS로 카드를 채운다.
+SEARCH_JOBS_STATE_PATH = Path.home() / ".ktx-srt-macro" / "search_jobs.json"
+
+DEFAULT_SEARCH_JOBS = [
+    {"dep": "대전", "arr": "서울", "date": "20260927", "time": "200000", "train_type": None},
+    {"dep": "서울", "arr": "대전", "date": "20260923", "time": "210000", "train_type": None},
+    {"dep": "조치원", "arr": "서울", "date": "20260926", "time": "150000", "train_type": None},
+]
 
 
 def resource_path(relative_path):
@@ -505,14 +541,14 @@ QFrame#statusBar {
 
 QLabel#ticketRoute {
     color: $RAIL_NAVY;
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 800;
     background: transparent;
 }
 
 QLabel#ticketMeta {
     color: $INK_MUTED;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     background: transparent;
 }
@@ -795,10 +831,12 @@ class SearchJobWidget(QWidget):
 
     "+ 검색 작업 추가"로 여러 개(최대 MAX_CONCURRENT_JOBS개 동시 실행) 만들 수 있다.
     로그인된 공유 ktx_service를 생성자로 주입받으며, 결제 검증/처리·동시 실행 슬롯·
-    네트워크 임계구역·알림음 중복 방지·자동결제 우선권·예약완료 통지는 전부
+    네트워크 임계구역·알림음 중복 방지·자동결제 직렬화·예약완료 통지는 전부
     앱 레벨(TrainReservationApp) 콜백으로 위임한다. 워커 스레드는 위젯을 직접
     만지지 않고 self.signals(JobSignals)로만 GUI 스레드에 통지한다.
     """
+
+    config_changed = pyqtSignal()  # 검색 조건 입력값이 바뀔 때마다 발신 (앱 레벨 저장 트리거용)
 
     def __init__(
         self,
@@ -808,6 +846,7 @@ class SearchJobWidget(QWidget):
         network_call,
         acquire_slot,
         acquire_payment_lock,
+        release_payment_lock,
         acquire_alert_guard,
         release_alert_guard,
         notify_reservation_completed,
@@ -821,7 +860,8 @@ class SearchJobWidget(QWidget):
         self._process_payment = process_payment
         self._network_call = network_call  # 검색/예약 HTTP 호출을 앱 레벨 전역 Lock으로 직렬화
         self._acquire_slot = acquire_slot  # 동시 실행 5개 제한 (GUI 스레드에서만 호출)
-        self._acquire_payment_lock = acquire_payment_lock  # 자동 결제는 첫 성공 건에만
+        self._acquire_payment_lock = acquire_payment_lock  # 자동 결제는 한 번에 한 건씩 순서대로(직렬화)
+        self._release_payment_lock = release_payment_lock
         self._acquire_alert_guard = acquire_alert_guard  # 알림음 동시 재생 방지
         self._release_alert_guard = release_alert_guard
         self._notify_reservation_completed = notify_reservation_completed  # 공용 예약완료 패널 통지
@@ -853,8 +893,8 @@ class SearchJobWidget(QWidget):
         ticket_stub = QFrame()
         ticket_stub.setObjectName("ticketStub")
         ticket_stub_layout = QHBoxLayout(ticket_stub)
-        ticket_stub_layout.setContentsMargins(0, 0, 12, 0)
-        ticket_stub_layout.setSpacing(12)
+        ticket_stub_layout.setContentsMargins(10, 10, 14, 10)
+        ticket_stub_layout.setSpacing(14)
 
         # 상태별 좌측 색바 (대기=회색 / 검색·실행중=amber / 예약완료=green / 중지=hairline)
         self.status_bar_frame = QFrame()
@@ -894,40 +934,36 @@ class SearchJobWidget(QWidget):
 
         station_names = [station.name for station in self.ktx_service.get_stations()]
 
-        self.dep_input = QComboBox()
+        self.dep_input = NoScrollComboBox()
         self.dep_input.setEditable(True)
         self.dep_input.addItems(station_names)
         self.dep_input.setCurrentText(DEFAULT_KTX_DEPARTURE)
-        dep_completer = QCompleter(station_names, self.dep_input)
-        dep_completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        dep_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.dep_input.setCompleter(dep_completer)
 
-        self.arr_input = QComboBox()
+        self.arr_input = NoScrollComboBox()
         self.arr_input.setEditable(True)
         self.arr_input.addItems(station_names)
         self.arr_input.setCurrentText(DEFAULT_KTX_ARRIVAL)
-        arr_completer = QCompleter(station_names, self.arr_input)
-        arr_completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        arr_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.arr_input.setCompleter(arr_completer)
 
         grid.addWidget(QLabel("출발역"), 0, 0)
         grid.addWidget(self.dep_input, 0, 1)
         grid.addWidget(QLabel("도착역"), 0, 2)
         grid.addWidget(self.arr_input, 0, 3)
 
-        self.date_input = QDateEdit(QDate.currentDate())
+        self.date_input = NoScrollDateEdit(QDate.currentDate())
         self.date_input.setCalendarPopup(True)
         self.date_input.setMinimumDate(QDate.currentDate())
-        self.time_input = QTimeEdit(QTime.currentTime())
+        self.date_input.setDisplayFormat("yyyy-MM-dd")
+
+        self.time_input = NoScrollTimeEdit(QTime.currentTime())
+        self.time_input.setDisplayFormat("HH:mm")
+        self.time_input.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
 
         grid.addWidget(QLabel("출발일"), 1, 0)
         grid.addWidget(self.date_input, 1, 1)
         grid.addWidget(QLabel("출발시간"), 1, 2)
         grid.addWidget(self.time_input, 1, 3)
 
-        self.train_type_input = QComboBox()
+        self.train_type_input = NoScrollComboBox()
         self.train_type_input.addItem("전체", None)
         for train_type, label in TRAIN_TYPE_LABELS.items():
             self.train_type_input.addItem(label, train_type)
@@ -1022,6 +1058,60 @@ class SearchJobWidget(QWidget):
         self._update_ticket_summary()
         self._set_status("대기중")
 
+        # 검색 조건이 바뀔 때마다 앱 레벨에 저장을 요청한다(재실행 시 복원용)
+        self.dep_input.currentTextChanged.connect(self.config_changed)
+        self.arr_input.currentTextChanged.connect(self.config_changed)
+        self.date_input.dateChanged.connect(self.config_changed)
+        self.time_input.timeChanged.connect(self.config_changed)
+        self.train_type_input.currentIndexChanged.connect(self.config_changed)
+        self.adult_input.textChanged.connect(self.config_changed)
+        self.child_input.textChanged.connect(self.config_changed)
+        self.senior_input.textChanged.connect(self.config_changed)
+
+    def get_search_config(self) -> dict:
+        """현재 검색 조건 입력값을 저장 가능한 dict로 반환한다."""
+        train_type = self.train_type_input.currentData()
+        return {
+            "dep": self.dep_input.currentText(),
+            "arr": self.arr_input.currentText(),
+            "date": self.date_input.date().toString("yyyyMMdd"),
+            "time": self.time_input.time().toString("HHmmss"),
+            "train_type": train_type.name if train_type is not None else None,
+            "adult": self.adult_input.text(),
+            "child": self.child_input.text(),
+            "senior": self.senior_input.text(),
+        }
+
+    def apply_search_config(self, config: dict) -> None:
+        """저장된(또는 기본) 검색 조건을 입력 필드에 반영한다. 알 수 없는 키는 무시한다."""
+        if config.get("dep"):
+            self.dep_input.setCurrentText(config["dep"])
+        if config.get("arr"):
+            self.arr_input.setCurrentText(config["arr"])
+        if config.get("date"):
+            date = QDate.fromString(config["date"], "yyyyMMdd")
+            if date.isValid():
+                self.date_input.setDate(date)
+        if config.get("time"):
+            time = QTime.fromString(config["time"], "HHmmss")
+            if time.isValid():
+                self.time_input.setTime(time)
+        train_type_name = config.get("train_type")
+        for i in range(self.train_type_input.count()):
+            data = self.train_type_input.itemData(i)
+            if data is None and train_type_name is None:
+                self.train_type_input.setCurrentIndex(i)
+                break
+            if data is not None and data.name == train_type_name:
+                self.train_type_input.setCurrentIndex(i)
+                break
+        if "adult" in config:
+            self.adult_input.setText(str(config["adult"]))
+        if "child" in config:
+            self.child_input.setText(str(config["child"]))
+        if "senior" in config:
+            self.senior_input.setText(str(config["senior"]))
+
     # ---- 티켓 스텁 요약 / 상태 표시 (표시 전용 - 예약 로직에는 관여하지 않음) ----
     def _update_ticket_summary(self, *_args):
         """출발역/도착역/날짜/시간/열차종류 요약을 티켓 스텁 헤더에 반영한다."""
@@ -1039,7 +1129,7 @@ class SearchJobWidget(QWidget):
         self.status_bar_frame.setStyleSheet(f"background: {bar_color}; border-radius: 2px;")
         self.status_label.setText(f"● {status}")
         self.status_label.setStyleSheet(
-            f"color: {text_color}; font-size: 12px; font-weight: 700; background: transparent;"
+            f"color: {text_color}; font-size: 14px; font-weight: 700; background: transparent;"
         )
         self.current_status = status
         self.signals.status_changed.emit(status)
@@ -1288,27 +1378,27 @@ class SearchJobWidget(QWidget):
     def _settle_payment(self, reservation) -> str:
         """예약 성공 건의 결제를 시도하고 결제 상태 문자열("자동결제완료"/"수동결제필요")을 반환한다.
 
-        자동 결제는 앱 전체에서 첫 성공 건에만 허용된다(payment_lock을
-        acquire(blocking=False)로 시도). 이미 다른 카드가 자동 결제를 사용했다면
-        이 카드는 수동 결제 필요로만 표시한다(결제 폼이 탭에 하나뿐이라 큐잉하지 않음).
+        결제 폼(카드 정보 입력)이 앱에 하나뿐이라 동시에 두 건을 함께 결제할 수는
+        없지만, 성공한 모든 건이 자동 결제 대상이다. payment_lock을 블로킹으로
+        acquire해 "한 번에 한 건씩, 순서대로" 처리되게 직렬화한다.
         """
         if not self._validate_payment():
             self.add_log("  ✗ 예약은 완료되었으나 결제 정보가 입력되지 않았습니다.")
             self.add_log(f"    예약번호: {reservation.reservation_number}")
             return "수동결제필요"
 
-        if not self._acquire_payment_lock():
-            self.add_log("  ⚠ 다른 작업이 이미 자동 결제를 사용했습니다(첫 성공 건에만 자동 결제).")
-            self.add_log(f"    예약번호: {reservation.reservation_number}")
-            return "수동결제필요"
+        self._acquire_payment_lock()
+        try:
+            payment = self._process_payment(reservation)
+        finally:
+            self._release_payment_lock()
 
-        payment = self._process_payment(reservation)
         if payment.success:
             self.add_log("  ✓ 결제 완료!")
             return "자동결제완료"
         else:
-            self.add_log("  ✗ 예약은 완료되었으나 결제에 실패했습니다.")
-            self.add_log(f"    예약번호: {payment.reservation_number}")
+            self.add_log(f"  ✗ 예약은 완료되었으나 결제에 실패했습니다: {payment.message}")
+            self.add_log(f"    예약번호: {reservation.reservation_number}")
             return "수동결제필요"
 
     def stop(self):
@@ -1814,8 +1904,10 @@ class TrainReservationApp(QMainWindow):
 
         layout.addWidget(self.jobs_tab_widget)
 
-        # 최초 카드 1개는 기본 배치 (Phase 3/4와 동일하게 바로 사용 가능해야 함)
-        self._add_search_job()
+        # 저장된 검색 조건이 있으면 복원하고, 없으면(최초 실행) 기본 카드 3개를 배치한다.
+        saved_configs = self._load_search_jobs_state()
+        for config in (saved_configs or DEFAULT_SEARCH_JOBS):
+            self._add_search_job(config)
 
         layout.addStretch()
         scroll.setWidget(container)
@@ -1827,8 +1919,11 @@ class TrainReservationApp(QMainWindow):
         return widget
 
     # ---- Phase 5: 검색 작업 카드 추가/삭제 (탭 컨테이너) ----
-    def _add_search_job(self):
-        """"+" corner 버튼(또는 최초 배치)에서 새 SearchJobWidget 카드를 새 탭으로 추가한다."""
+    def _add_search_job(self, config: dict = None):
+        """"+" corner 버튼(또는 최초 배치)에서 새 SearchJobWidget 카드를 새 탭으로 추가한다.
+
+        config가 주어지면(저장된 상태 복원 또는 기본값 시딩) 생성 직후 입력값에 반영한다.
+        """
         if len(self.search_jobs) >= MAX_SEARCH_JOBS:
             self.add_notification("info", f"검색 작업은 최대 {MAX_SEARCH_JOBS}개까지 만들 수 있습니다")
             return
@@ -1839,15 +1934,21 @@ class TrainReservationApp(QMainWindow):
             process_payment=self._process_ktx_payment,
             network_call=self.run_network_call,
             acquire_slot=self.try_start_job,
-            acquire_payment_lock=self.try_acquire_auto_payment,
+            acquire_payment_lock=self.acquire_auto_payment,
+            release_payment_lock=self.release_auto_payment,
             acquire_alert_guard=self.try_acquire_alert,
             release_alert_guard=self.release_alert,
             notify_reservation_completed=self.app_signals.reservation_completed.emit,
             notify=self.app_signals.notification.emit,
             on_delete=self._remove_search_job,
         )
+        if config:
+            job.apply_search_config(config)
+
         # 카드 종료 시 앱 레벨 동시 실행 슬롯 반납 (카드 자신의 _on_finished와는 별개로 연결)
         job.signals.finished.connect(self._on_job_finished)
+        # 검색 조건이 바뀔 때마다 상태 파일에 저장(재실행 시 복원용)
+        job.config_changed.connect(self._save_search_jobs_state)
 
         tab_label = f"작업 {len(self.search_jobs) + 1}"
         index = self.jobs_tab_widget.addTab(job, tab_label)
@@ -1870,6 +1971,28 @@ class TrainReservationApp(QMainWindow):
         self.search_jobs.append(job)
         self.add_log(f"➕ 검색 작업 카드를 추가했습니다 (현재 {len(self.search_jobs)}개)")
         self._update_add_job_button_state()
+        self._save_search_jobs_state()
+
+    def _load_search_jobs_state(self):
+        """저장된 검색 작업 카드 설정을 읽는다. 없거나 손상됐으면 None을 반환한다."""
+        try:
+            with open(SEARCH_JOBS_STATE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list) and data:
+                return data
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            pass
+        return None
+
+    def _save_search_jobs_state(self):
+        """현재 배치된 모든 검색 작업 카드의 입력값을 파일에 저장한다(다음 실행 시 복원용)."""
+        try:
+            SEARCH_JOBS_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            configs = [job.get_search_config() for job in self.search_jobs]
+            with open(SEARCH_JOBS_STATE_PATH, "w", encoding="utf-8") as f:
+                json.dump(configs, f, ensure_ascii=False, indent=2)
+        except OSError as e:
+            self.add_log(f"⚠ 검색 조건 저장 실패: {e}")
 
     def _on_job_tab_close_requested(self, index):
         """탭의 닫기(x) 버튼 클릭 시 호출됨. 실제 삭제 가능 여부는 _remove_search_job이 판단한다."""
@@ -1897,6 +2020,7 @@ class TrainReservationApp(QMainWindow):
 
         self.add_log(f"➖ 검색 작업 카드를 삭제했습니다 (현재 {len(self.search_jobs)}개)")
         self._update_add_job_button_state()
+        self._save_search_jobs_state()
 
     def _update_add_job_button_state(self):
         """카드(탭) 총 개수 상한에 맞춰 "+" 버튼 활성/비활성을 갱신한다."""
@@ -1966,14 +2090,18 @@ class TrainReservationApp(QMainWindow):
         with self._alert_lock:
             self.is_alert_playing = False
 
-    # ---- Phase 5: 자동 결제는 첫 성공 건에만 ----
-    def try_acquire_auto_payment(self) -> bool:
-        """예약 성공 카드가 자동 결제를 시도해도 되는지 확인한다.
+    # ---- Phase 5: 자동 결제는 한 번에 한 건씩 순서대로 ----
+    def acquire_auto_payment(self) -> None:
+        """결제 폼(카드 정보 입력)이 앱에 하나뿐이라, 이 락으로 결제 시도를 직렬화한다.
 
-        앱 수명 동안 단 한 번만 True를 반환하는 1회성 게이트다(반납하지 않음).
-        먼저 획득한 카드 이후의 모든 성공 건은 항상 "수동결제필요"로 처리된다.
+        여러 카드가 동시에 예약에 성공해도 스킵하지 않고, 이 락을 잡은 순서대로
+        한 건씩 자동 결제를 진행한다(블로킹 acquire).
         """
-        return self.payment_lock.acquire(blocking=False)
+        self.payment_lock.acquire()
+
+    def release_auto_payment(self) -> None:
+        """결제를 마친 카드가 다음 대기 중인 카드에게 락을 넘긴다."""
+        self.payment_lock.release()
 
     # ---- Phase 5: 공용 "예약 완료" 패널 ----
     def _on_reservation_completed(self, data: dict):
