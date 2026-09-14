@@ -66,8 +66,10 @@ KTX 기차표 자동 예약 매크로는 코레일(KTX)의 온라인 예약 시�
 가장 간단한 방법입니다. 별도의 설치 없이 바로 실행할 수 있습니다.
 
 1. [Releases](../../releases) 페이지에서 최신 버전 다운로드
+   - [Windows 다운로드](../../releases/latest/download/KTX-SRT-Macro.exe)
+   - [macOS 다운로드](../../releases/latest/download/KTX-SRT-Macro-macOS.zip)
 2. Windows: `KTX-SRT-Macro.exe` 실행
-3. macOS: `KTX-SRT-Macro.app` 실행
+3. macOS: `KTX-SRT-Macro-macOS.zip` 압축 해제 후 `KTX-SRT-Macro.app` 실행
 
 #### 방법 2: 소스 코드에서 실행
 
