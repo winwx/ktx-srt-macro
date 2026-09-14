@@ -226,7 +226,7 @@ class TestKTXServicePayment:
         # Arrange
         ktx_service._logged_in = True
         mock_korail = Mock()
-        mock_korail.reservations.return_value = None
+        mock_korail.reservations.return_value = []
         ktx_service._korail = mock_korail
 
         mock_reservation = ReservationResult(

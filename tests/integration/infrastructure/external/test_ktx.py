@@ -31,7 +31,8 @@ class TestKorailAuthenticationIntegration:
             "strMbCrdNo": "12345678",
             "strCustNm": "홍길동",
             "strEmailAdr": "test@example.com",
-            "strCpNo": "010-1234-5678"
+            "strCpNo": "010-1234-5678",
+            "Key": "test_session_key"
         })
         mock_session.post.return_value = mock_response
 
@@ -114,7 +115,7 @@ class TestKorailTrainSearchIntegration:
                 ]
             }
         })
-        mock_session.get.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
         korail = Korail(korail_id="test_id", korail_pw="test_pw", auto_login=False)
         korail._session = mock_session
@@ -158,7 +159,7 @@ class TestKorailTrainSearchIntegration:
                 ]
             }
         })
-        mock_session.get.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
         korail = Korail(korail_id="test_id", korail_pw="test_pw", auto_login=False)
         korail._session = mock_session
@@ -181,7 +182,7 @@ class TestKorailTrainSearchIntegration:
             "h_msg_cd": "P100",
             "h_msg_txt": "No results found"
         })
-        mock_session.get.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
         korail = Korail(korail_id="test_id", korail_pw="test_pw", auto_login=False)
         korail._session = mock_session
@@ -360,7 +361,7 @@ class TestKorailErrorHandlingIntegration:
             "h_msg_cd": "E999",
             "h_msg_txt": "Unknown error occurred"
         })
-        mock_session.get.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
         korail = Korail(korail_id="test_id", korail_pw="test_pw", auto_login=False)
         korail._session = mock_session

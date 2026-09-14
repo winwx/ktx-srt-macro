@@ -650,7 +650,9 @@ class Passenger:
         self.card_pw = card_pw
 
     def __add__(self, other):
-        assert isinstance(other, self.__class__)
+        if not isinstance(other, self.__class__):
+            raise TypeError(
+                "other's class(%s) is not equal to self's class(%s)." % (other.__class__, self.__class__))
         if self.group_key() == other.group_key():
             return self.__class__(count=self.count + other.count, discount_type=self.discount_type, card=self.card,
                                   card_no=self.card_no, card_pw=self.card_pw)

@@ -71,7 +71,7 @@ class TestKTXServiceIntegration:
         mock_korail_train.has_seat.return_value = True
         mock_korail.search_train.return_value = [mock_korail_train]
         mock_korail.reserve.return_value = mock_korail_reservation
-        mock_korail.reservations.return_value = mock_korail_reservation
+        mock_korail.reservations.return_value = [mock_korail_reservation]
         mock_korail.pay_with_card.return_value = True
 
         ktx_service._korail = mock_korail

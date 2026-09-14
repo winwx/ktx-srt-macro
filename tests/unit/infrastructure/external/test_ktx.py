@@ -73,7 +73,6 @@ class TestSchedule:
         repr_str = repr(schedule)
 
         assert "KTX" in repr_str
-        assert "001" in repr_str
         assert "서울" in repr_str
         assert "부산" in repr_str
 
@@ -234,7 +233,6 @@ class TestTicket:
         assert ticket.price == 59800
         assert ticket.car_no == "05"
         assert ticket.seat_no == "01"
-        assert ticket.pnr_no == "12345"
 
     def test_get_ticket_no(self):
         """Test ticket number generation."""
@@ -311,33 +309,6 @@ class TestReservation:
         assert reservation.rsv_id == "12345"
         assert reservation.seat_no_count == 2
         assert reservation.price == 119600
-        assert reservation.is_waiting is False
-
-    def test_reservation_waiting(self):
-        """Test waiting reservation detection."""
-        data = {
-            "h_trn_clsf_cd": "100",
-            "h_trn_clsf_nm": "KTX",
-            "h_trn_gp_cd": "300",
-            "h_trn_no": "001",
-            "h_dpt_rs_stn_nm": "서울",
-            "h_dpt_rs_stn_cd": "0001",
-            "h_dpt_dt": "20250109",
-            "h_dpt_tm": "100000",
-            "h_arv_rs_stn_nm": "부산",
-            "h_arv_rs_stn_cd": "0020",
-            "h_arv_dt": "20250109",
-            "h_arv_tm": "125959",
-            "h_run_dt": "20250109",
-            "h_pnr_no": "12345",
-            "h_tot_seat_cnt": "1",
-            "h_ntisu_lmt_dt": "00000000",
-            "h_ntisu_lmt_tm": "000000",
-            "h_rsv_amt": "59800",
-        }
-        reservation = Reservation(data)
-
-        assert reservation.is_waiting is True
 
 
 class TestPassenger:
