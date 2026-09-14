@@ -61,3 +61,35 @@ jobs:
         with:
           name: KTX-SRT-Macro-macOS
           path: dist/
+
+  release:
+    needs: [build-windows, build-macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KTX-SRT-Macro-Windows
+          path: artifacts/windows
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: KTX-SRT-Macro-macOS
+          path: artifacts/macos
+
+      - name: Package macOS app
+        run: |
+          cd artifacts/macos
+          zip -r ../KTX-SRT-Macro-macOS.zip KTX-SRT-Macro.app
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            artifacts/windows/KTX-SRT-Macro.exe \
+            artifacts/KTX-SRT-Macro-macOS.zip \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
